@@ -18,24 +18,23 @@ required to implement a rudimentary language server.
 Programmers who are interested in understanding how their editor provides many of
 its /magic/ functionalities.
 * Level
-Beginner to intermediate
+Intermmediate to advanced.
 * Objectives
 Attendees will walk away with a better understanding of the LSP specification,
 along with how an LSP server provides linting, formatting and autocompletion to
 all editors.
 * Detailed Abstract
-In today's IDE-land, I've often overheard conversations between developers about
+In today's IDE-land, we've often overheard conversations between developers about
 new features being added to their editor-of-choice and how editor XYZ is better
 than ABC (vim vs emacs vs VSCode vs IntelliJ, we know the drill). This talk
 doesn't stoke fire to that debate in any direction (since different things work
-for different people, and that's good for competition). But, a very important
-tool that often powers most of the magical features that come with modern
-software development is the LSP server. The LSP server often keeps chugging in
-the background, tirelessly providing the user with diagnosis regarding the
-codes, autocompleting variables, and formatting the codebase to maintain
-prettiness. While various elements such as parsing, linting, and formatting have
-long existed, it is the LSP server that seamlessly unifies these features in an
-editor-agnostic manner.
+for different people). But, a very important tool that often powers most of the
+magical features that come with modern software development is the LSP server.
+The LSP server often keeps chugging in the background, tirelessly providing the
+user with diagnosis regarding the codes, autocompleting variables, and
+formatting the codebase to maintain prettiness. While various elements such as
+parsing, linting, and formatting have long existed, it is the LSP server that
+seamlessly unifies these features in an editor-agnostic manner.
 
 LSP servers are used everywhere, often installed individually by the user even,
 but there aren't many resources regarding how to actually build a functional
@@ -63,7 +62,9 @@ the basic functionalities to an editor client.
 
 * Additional Notes
 ** Code for the talk
-The talk will be using a rudimentary implementation of a SQL language server written by the speaker as an example. It is open source and can be found on [[https://www.github.com/chahak13/sql-lsp][GitHub]]
+The talk will be using a rudimentary implementation of a SQL language server
+written by the speaker as an example. It is open source and can be found on
+[[https://www.github.com/chahak13/sql-lsp][GitHub]]
 ** Speaking experience
 This will be my first time speaking at PyCon (or any similar software
 conferences). I have given small talks at the workplace about editors and why
