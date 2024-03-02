@@ -1,0 +1,47 @@
+:root {
+    --r-background-color: #fffaeb
+}
+.reveal p {
+    text-align: left;
+}
+.reveal table {
+    display: block;
+    font-size: 0.5em;
+    overflow: auto;
+    max-height: 600px;
+}
+.reveal code {
+    color: LightSlateGray;
+    font-family: monospace;
+    font-size: 20pt;
+}
+div.legalese {
+    font-size: 1.4vh;
+    position: fixed;
+    left: 3px;
+    bottom: 3px;
+    z-index: 50;
+}
+
+.reveal pre {
+    display: block;
+    position: relative;
+    width: 90%;
+    margin: var(--r-block-margin) auto;
+    text-align: left;
+    font-size: 0.55em;
+    font-family: var(--r-code-font);
+    line-height: 1.25em;
+    word-wrap: break-word;
+    box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.15);
+}
+
+.reveal table {
+    font-size: 1em;
+}
+
+.reveal img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}

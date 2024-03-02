@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>LSP Demystified</title>
+<meta name="author" content="Chahak Mehta"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="file:///home/chahak/.config/emacs/.local/straight/build-29.3/revealjs/dist/reveal.css"/>
+
+<link rel="stylesheet" href="file:///home/chahak/.config/emacs/.local/straight/build-29.3/revealjs/dist/theme/serif.css" id="theme"/>
+
+<link rel="stylesheet" href="./local.css"/>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide">
+<h1>LSP Demystified</h1><h2>How to write an LSP server in Python</h2><h3>Chahak Mehta</h3><h4>(Software Engineer @ Arch.co)</h4>
+<aside class="notes">
+<p>
+In this talk I cover how to write a Language Server in Python with the example
+of a MySQL Language Server that I wrote.
+</p>
+
+</aside>
+</section>
+<section>
+<section id="slide-org6affdbc">
+<h2 id="org6affdbc">Why Language Server Protocol (LSP)?</h2>
+<ul>
+<li>Let&rsquo;s start with a quick poll.</li>
+
+</ul>
+<aside class="notes">
+<ul>
+<li>Take poll: How many in the audience use the following -
+<ul>
+<li>VSCode</li>
+<li>JetBrains IDE</li>
+<li>Vim/Neovim</li>
+<li>Emacs</li>
+<li>Others</li>
+
+</ul></li>
+
+</ul>
+
+<p>
+Most of us use our editors to improve our development experience. A huge part of
+this experience is provided by the Lanugage Servers (LS).
+</p>
+
+<p>
+Cue: Show images.
+</p>
+
+</aside>
+
+</section>
+<section>
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+<caption class="t-above"><span class="table-number">Table 1:</span> Examples of completion and linting error using <code>basedpyright</code> for Python</caption>
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left"><img src="images/lsp_completion_example_2.png" alt="lsp_completion_example_2.png" /></td>
+<td class="org-left"><img src="images/lsp_error_example_2.png" alt="lsp_error_example_2.png" /></td>
+</tr>
+</tbody>
+</table>
+
+
+<aside class="notes">
+<p>
+The first image shows an example of autocomplete while the second image shows an
+example of a linting error. These are provided by the <code>basedpyright</code> language
+server for python.
+</p>
+
+<p>
+These autocomplete options allow us to have the documentation for symbols a
+keystroke away.
+</p>
+
+<p>
+IDEs that provide an integrated experience for particular languages can have
+their own framework to provide these insights but this requires implementing
+these features for every editor individually.
+</p>
+
+<p>
+The Language Server Protocol (LSP) provides us with a unified framework such that
+the implementation for these features for a language can be decoupled from the
+editor that is being used.
+</p>
+
+</aside>
+
+</section>
+<section>
+<aside class="notes">
+<p>
+Language Servers also reduce the complexity required to implement new editing
+features for a language.
+</p>
+
+<p>
+For example, as can be seen in the first figure, if there were no language
+server then implementing, say autocomplete, for Python would require
+implementing it separately for each editor.
+</p>
+
+<p>
+On the other hand, with Language Servers, one can implement a feature and expose
+it via the corresponding Language Server. As long as the editor provides a
+complete client for a Language Server, the new feature is automatically
+available for each editor now.
+</p>
+
+<p>
+Hence, this requires only one unit of work on the lanugage server.
+</p>
+
+</aside>
+
+
+<div id="org953b8bb" class="figure">
+<p><img src="images/with_without_lsp.png" alt="with_without_lsp.png" />
+</p>
+<p><span class="figure-number">Figure 1: </span>Feature implementation with &amp; without Language Servers</p>
+</div>
+</section>
+</section>
+<section>
+<section id="slide-org36f1ae7">
+<h2 id="org36f1ae7">LSP Specification and JSON-RPC</h2>
+<ul>
+<li>How does this work?
+<ul>
+<li><p>
+A Language Server interacts with a stream of messages
+that follow a structure as defined in the <i>Language Server Protocol</i> (LSP).
+</p>
+
+
+<div id="orgc3c6cef" class="figure">
+<p><img src="images/language-server-sequence.png" alt="language-server-sequence.png" width="85%" />
+</p>
+<p><span class="figure-number">Figure 2: </span>Image from LSP Documentation - <a href="https://microsoft.github.io/language-server-protocol/overviews/lsp/overview/">https://microsoft.github.io/language-server-protocol/overviews/lsp/overview/</a></p>
+</div></li>
+
+<li>Each of these messages are structured as <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> messages which forms the
+basis of the Language Server Protocol.</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+<section>
+<aside class="notes">
+<ul>
+<li>The LSP Specification defines a set of <i>capabilities</i> that a server provides
+to act on a document, language, workspace or window.
+<ul>
+<li>From the image - <code>textDocument/didOpen</code>, <code>textDocument/didChange</code>,
+<code>textDocument/publishDiagnostics</code>, <code>textDocument/definition</code> etc.</li>
+
+</ul></li>
+
+<li>This communication uses the <a href="https://www.jsonrpc.org/specification">JSON-RPC</a> specification.</li>
+
+</ul>
+
+</aside>
+
+<p>
+Each of these <i>capabilities</i> have a defined specification for the <i>Request</i> and
+its accepted <i>Response</i>. For example, for <code>textDocument/definition</code>
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-python"><span style="color: #008250;">@attrs.define</span>
+<span style="color: #a26310; font-weight: bold;">class</span> <span style="color: #008250;">TextDocumentDefinitionRequest</span>:
+    <span style="color: #946830; font-weight: bold;">id</span>: Union[<span style="color: #946830; font-weight: bold;">int</span>, <span style="color: #946830; font-weight: bold;">str</span>] = attrs.field()
+    <span style="color: #0f708a;">params</span>: DefinitionParams = attrs.field()
+    <span style="color: #0f708a;">method</span>: <span style="color: #946830; font-weight: bold;">str</span> = <span style="color: #c74400;">"textDocument/definition"</span>
+    <span style="color: #0f708a;">jsonrpc</span>: <span style="color: #946830; font-weight: bold;">str</span> = attrs.field(default=<span style="color: #c74400;">"2.0"</span>)
+</pre>
+</div>
+<ul>
+<li>Code 1: <code>textDocument/definition</code> request as per <a href="https://github.com/microsoft/lsprotocol">https://github.com/microsoft/lsprotocol</a></li>
+
+</ul>
+
+<p>
+<br />
+</p>
+<div class="org-src-container">
+
+<pre class="src src-python"><span style="color: #008250;">@attrs.define</span>
+<span style="color: #a26310; font-weight: bold;">class</span> <span style="color: #008250;">TextDocumentDefinitionResponse</span>:
+    <span style="color: #946830; font-weight: bold;">id</span>: Optional[Union[<span style="color: #946830; font-weight: bold;">int</span>, <span style="color: #946830; font-weight: bold;">str</span>]] = attrs.field()
+    <span style="color: #0f708a;">result</span>: <span style="color: #0f708a;">Union</span>[<span style="color: #0f708a;">Definition</span>, <span style="color: #0f708a;">List</span>[DefinitionLink], <span style="color: #3f60af;">None</span>] = attrs.field(default=<span style="color: #3f60af;">None</span>)
+    <span style="color: #0f708a;">jsonrpc</span>: <span style="color: #946830; font-weight: bold;">str</span> = attrs.field(default=<span style="color: #c74400;">"2.0"</span>)
+</pre>
+</div>
+<ul>
+<li>Code 2: <code>textDocument/definition</code> response as per <a href="https://github.com/microsoft/lsprotocol">https://github.com/microsoft/lsprotocol</a></li>
+
+</ul>
+
+
+<p>
+The client is then responsible to handle this response correctly and go to the
+location defined in the response to <code>textDocument/definition</code>
+</p>
+
+<aside class="notes">
+<p>
+This is where the language server SDKs are invaluable. For example, <a href="https://github.com/openlawlibrary/pygls/"><code>pygls</code></a> is
+a Language Server SDK for Python by <code>openlawlibrary</code>. Using this allows us to
+focus on the <i>capabilities</i> of our server without having to worry about how to
+communicate using JSON-RPC. We will use this library as our foundation for the
+rest of the talk.
+</p>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-orgd89df41">
+<h2 id="orgd89df41">Parsing the code</h2>
+<aside class="notes">
+<ul>
+<li>Now that we have established a basis of communication, we need the server to
+understand the codebase to be able to respond to our requests. This requires
+parsing the files into an AST. Doing this is largely backed, and hence
+simplified, by the use of language grammars. For example, <code>sqlfluff</code> provides
+language grammars for different dialects of SQL and provides a parsing and
+lexing ability on top of this grammar.</li>
+<li>We can use this to parse our query correctly to determine where, logically,
+our cursor is pointing at.</li>
+
+</ul>
+
+</aside>
+
+<ul>
+<li>The server needs to parse the code to <i>understand</i> it and respond to our requests.</li>
+<li>Most languages have a formal language grammar that can be used to generate an
+Abstract Syntax Tree (AST).</li>
+<li><p>
+Example using <code>sqlfluff</code>:
+</p>
+<div class="org-src-container">
+
+<pre class="src src-python"><span style="color: #a26310; font-weight: bold;">from</span> sqlfluff.core <span style="color: #a26310; font-weight: bold;">import</span> Lexer, Parser
+
+<span style="color: #0f708a;">text</span> = document.source
+<span style="color: #0f708a;">lexer</span> = Lexer(config=fluff_config)
+<span style="color: #0f708a;">parser</span> = Parser(config=fluff_config)
+<span style="color: #0f708a;">parsed_query</span> = parser.parse(lexer.lex(text)[<span style="color: #3f60af;">0</span>])
+</pre>
+</div></li>
+
+</ul>
+</section>
+</section>
+<section>
+<section id="slide-org058c9f0">
+<h2 id="org058c9f0">Linting code and Publishing diagnostics</h2>
+<aside class="notes">
+<ul>
+<li>In our case, we use the linting rules that are provided by <code>sqlfluff</code>
+since they are quite extensive and we want to focus on the LSP aspect of it.</li>
+
+</ul>
+
+</aside>
+
+<ul>
+<li>Linting rules can now be applied on the Abstract Syntax Tree that we obtained
+by parsing the code.</li>
+<li><p>
+These linting errors can be displayed on the editor as LSP diagnostics using
+the <code>textDocument/publishDiagnostics</code> <i>capability</i>.
+</p>
+
+<p>
+Code 3: Publish diagnostics capability using pygls
+</p></li>
+
+</ul>
+<div class="org-src-container">
+
+<pre class="src src-python"><span style="color: #a26310; font-weight: bold;">def</span> <span style="color: #5a7400;">_publish_diagnostics</span>(ls: SqlLanguageServer, uri: <span style="color: #946830; font-weight: bold;">str</span>):
+    <span style="color: #b05350; font-style: italic;">"""Publish diagnostics to LSP server."""</span>
+    <span style="color: #0f708a;">document</span> = ls.workspace.get_text_document(uri)
+    <span style="color: #0f708a;">lint_diagnostics</span> = sqlfluff.lint(document.source, dialect=<span style="color: #c74400;">"mysql"</span>, config=fluff_config)
+    <span style="color: #0f708a;">diagnostics</span>: <span style="color: #946830; font-weight: bold;">list</span>[Diagnostic] = [
+        Diagnostic(
+            <span style="color: #946830; font-weight: bold;">range</span>=current_word_range(
+                document,
+                position=Position(line=x[<span style="color: #c74400;">"line_no"</span>] - <span style="color: #3f60af;">1</span>, character=x[<span style="color: #c74400;">"line_pos"</span>] - <span style="color: #3f60af;">1</span>),
+            ),
+            message=x[<span style="color: #c74400;">"description"</span>],
+            code=x[<span style="color: #c74400;">"code"</span>],
+        )
+        <span style="color: #a26310; font-weight: bold;">for</span> x <span style="color: #a26310; font-weight: bold;">in</span> lint_diagnostics
+    ]
+    ls.publish_diagnostics(uri, diagnostics=diagnostics)
+</pre>
+</div>
+
+
+<div id="org5f6c304" class="figure">
+<p><img src="images/lsp_sql_lint_error.png" alt="lsp_sql_lint_error.png" />
+</p>
+</div>
+<aside class="notes">
+<p>
+As you can see, once we have the linting diagnostics from a tool
+we massage them into the interface definted by the
+Language Server Protocol. Using <code>pygls</code> it is as easy as creating an object
+of the <code>Diagnostic</code> class. We can then publish these diagnostics for a
+document URI using the method provided <code>pygls</code>
+</p>
+
+</aside>
+
+</section>
+</section>
+<section>
+<section id="slide-org493339a">
+<h2 id="org493339a">Smart autocompletion</h2>
+<aside class="notes">
+<ul>
+<li>Having setup parsing and linting provides us the ability to provide smart
+autocomplete suggestions.</li>
+<li>What does &ldquo;smart&rdquo; mean?
+<ul>
+<li>Suggestions that vary by context.</li>
+<li>For example, in SQL, if you&rsquo;re writing <code>&lt;table&gt;.</code> then you would want to see
+all the column names suggested before any other word.</li>
+
+</ul></li>
+<li>This can be achieved by deconstructing the syntax tree to understand the
+location of the cursor and making suggestions based on that.</li>
+<li>Autocomplete is probably the most used feature in Language Servers
+since it is used on almost every keystroke.</li>
+
+</ul>
+
+</aside>
+
+<ul>
+<li>One of the most used feature of Language Servers.</li>
+<li>Allows the server to suggest context-aware completion suggestions.</li>
+
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-python"><span style="color: #a26310; font-weight: bold;">match</span> current_segment.get_parent()[<span style="color: #3f60af;">0</span>]:
+    <span style="color: #a26310; font-weight: bold;">case</span> ColumnReferenceSegment():
+        <span style="color: #0f708a;">curr_seg</span> = segments[segment_id].raw
+        <span style="color: #0f708a;">prev_seg</span> = segments[segment_id - <span style="color: #3f60af;">1</span>].raw
+        <span style="color: #a26310; font-weight: bold;">if</span> curr_seg == <span style="color: #c74400;">"."</span> <span style="color: #a26310; font-weight: bold;">or</span> prev_seg == <span style="color: #c74400;">"."</span>:
+            <span style="color: #0f708a;">alias</span> = segments[segment_id - <span style="color: #3f60af;">1</span>] <span style="color: #a26310; font-weight: bold;">if</span> curr_seg == <span style="color: #c74400;">"."</span> <span style="color: #a26310; font-weight: bold;">else</span> segments[segment_id - <span style="color: #3f60af;">2</span>]
+            <span style="color: #0f708a;">table_name</span> = _get_alias_table_name(alias.raw, parsed_query)
+            <span style="color: #0f708a;">columns</span> = dbconn.get_columns(table_name=table_name)
+        <span style="color: #a26310; font-weight: bold;">else</span>:
+            <span style="color: #0f708a;">columns</span> = dbconn.get_columns()
+        candidates.extend([
+                CompletionItem(
+                    label=col.name,
+                    kind=CompletionItemKind.Field,
+                    detail=col.table_name,
+                    documentation=<span style="color: #946830; font-weight: bold;">str</span>(col),
+                    sort_text=<span style="color: #c74400;">"0"</span>,
+                )
+                <span style="color: #a26310; font-weight: bold;">for</span> col <span style="color: #a26310; font-weight: bold;">in</span> columns
+                <span style="color: #a26310; font-weight: bold;">if</span> re.<span style="color: #a26310; font-weight: bold;">match</span>(match_regex, col.name)
+            ])
+    <span style="color: #a26310; font-weight: bold;">case</span> TableReferenceSegment():
+        <span style="color: #0f708a;">tables</span> = dbconn.get_tables()
+        candidates.extend([
+                CompletionItem(
+                    label=table.name,
+                    kind=CompletionItemKind.Field,
+                    detail=table.<span style="color: #946830; font-weight: bold;">type</span>,
+                    documentation=table.description,
+                    sort_text=<span style="color: #c74400;">"1"</span>,
+                )
+                <span style="color: #a26310; font-weight: bold;">for</span> table <span style="color: #a26310; font-weight: bold;">in</span> tables
+                <span style="color: #a26310; font-weight: bold;">if</span> re.<span style="color: #a26310; font-weight: bold;">match</span>(match_regex, table.name)
+            ])
+</pre>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org1269aa5">
+<h2 id="org1269aa5">Help text and documentation</h2>
+<ul>
+<li>Another feature of Language Servers that we often use is the ability to see
+documentation or help text while writing code. This can be while looking at
+autocomplete candidates to select the right variable name or while just
+reading the code.</li>
+<li><p>
+For autocomplete, this documentation comes from the <code>documentation</code> key set on
+each <code>CandidateItem</code>.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-python">candidates.extend(
+    [
+        CompletionItem(
+            label=table.name,
+            kind=CompletionItemKind.Field,
+            detail=table.<span style="color: #946830; font-weight: bold;">type</span>,
+            documentation=table.description,
+            sort_text=<span style="color: #c74400;">"1"</span>,
+        )
+        <span style="color: #a26310; font-weight: bold;">for</span> table <span style="color: #a26310; font-weight: bold;">in</span> tables
+        <span style="color: #a26310; font-weight: bold;">if</span> re.<span style="color: #a26310; font-weight: bold;">match</span>(match_regex, table.name)
+    ]
+)
+</pre>
+</div>
+
+</section>
+<section></li>
+<li>The <code>textDocument/hover</code> <i>capability</i> defined by the LSP
+specification defines the behaviour on hover which is another place where we
+can see the documentation.</li>
+
+</ul>
+
+
+<div id="org633505d" class="figure">
+<p><img src="images/lsp_hover_example_2.png" alt="lsp_hover_example_2.png" width="75%" />
+</p>
+<p><span class="figure-number">Figure 3: </span>Example showing documentation for <code>override</code> on <code>hover</code></p>
+</div>
+</section>
+</section>
+<section>
+<section id="slide-org74084aa">
+<h2 id="org74084aa">Other methods and capabilities</h2>
+<ul>
+<li>These were just a few of the major methods that are defined by the LSP spec.
+There are many other functions like <code>codeAction</code>, <code>formatting</code> etc. which can
+be used to implement features like -
+<ul>
+<li>Running the code</li>
+<li>Formatting the code</li>
+<li>Organizing imports
+etc.</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgbb8b9a1">
+<h2 id="orgbb8b9a1">Integration with editors</h2>
+<ul>
+<li>Very simple changes can be made to make sure LSP clients to ensure the
+language server can correctly communicate with them.</li>
+<li><p>
+For example, to enable query execution with <code>sql-ls</code> in <code>eglot</code>, we can use
+a simple patch:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-diff">    diff --git a/eglot.el b/eglot.el
+index f247c43..974e7d8 100644
+--- <span style="font-weight: bold;">a/eglot.el</span>
++++ <span style="font-weight: bold;">b/eglot.el</span>
+<span style="background-color: #e7d7c6; font-weight: bold;">@@ -3685,7 +3685,15 @@</span><span style="background-color: #e7d7c6;"> at point.  With prefix argument, prompt for ACTION-KIND."</span>
+                                     (string-prefix-p action-kind (plist-get a :kind)))
+                            collect a)))
+     (if interactive
+<span style="color: #8f1313; background-color: #f8d0b6;">-</span><span style="color: #8f1313; background-color: #f8d0b6;">        (eglot--read-execute-code-action actions server action-kind)</span>
+<span style="color: #005000; background-color: #d7ecb0;">+</span><span style="color: #005000; background-color: #d7ecb0;">        (</span><span style="color: #005000; background-color: #c9dda0;">let ((serverName (plist-get (eglot--server-info server) :name)))</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span><span style="color: #005000; background-color: #c9dda0;">          (if (string-equal serverName "sql-ls")</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span><span style="color: #005000; background-color: #c9dda0;">              (with-current-buffer (get-buffer-create "*sql-ls-eglot results*")</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span><span style="color: #005000; background-color: #c9dda0;">                (with-help-window (buffer-name)</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span><span style="color: #005000; background-color: #c9dda0;">                  (erase-buffer)</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span><span style="color: #005000; background-color: #c9dda0;">                  (insert (</span><span style="color: #005000; background-color: #d7ecb0;">eglot--read-execute-code-action actions server action-kind)</span><span style="color: #005000; background-color: #c9dda0;">)))</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span><span style="color: #005000; background-color: #c9dda0;">            (eglot--read-execute-code-action actions server action-kind)))</span><span style="color: #005000; background-color: #c9dda0;">
+</span><span style="color: #005000; background-color: #c9dda0;">+</span>
+       actions)))
+
+ (defalias 'eglot-code-actions-at-mouse (eglot--mouse-call 'eglot-code-actions)
+</pre>
+</div></li>
+
+</ul>
+
+<aside class="notes">
+<p>
+And that&rsquo;s it. This is a proof for the image we saw earlier about how we can
+easily incorporate new languages and features into an editor without many changes.
+</p>
+
+</aside>
+</section>
+</section>
+<section>
+<section id="slide-org82d10c1">
+<h2 id="org82d10c1">Demo</h2>
+</section>
+</section>
+<section>
+<section id="slide-org0c2234f">
+<h2 id="org0c2234f">Summary</h2>
+
+<div id="orge95d8cd" class="figure">
+<p><img src="images/summary.png" alt="summary.png" />
+</p>
+</div>
+</section>
+</section>
+<section>
+<section id="slide-org596a826">
+<h2 id="org596a826">Questions?</h2>
+</section>
+</section>
+</div>
+</div>
+<script src="file:///home/chahak/.config/emacs/.local/straight/build-29.3/revealjs/dist/reveal.js"></script>
+<script src="file:///home/chahak/.config/emacs/.local/straight/build-29.3/revealjs/plugin/notes/notes.js"></script>
+<script src="file:///home/chahak/.config/emacs/.local/straight/build-29.3/revealjs/plugin/search/search.js"></script>
+<script src="file:///home/chahak/.config/emacs/.local/straight/build-29.3/revealjs/plugin/zoom/zoom.js"></script>
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: true,
+keyboard: true,
+mouseWheel: false,
+fragmentInURL: false,
+hashOneBasedIndex: false,
+pdfSeparateFragments: true,
+overview: true,
+width: 1920,
+height: 1080,
+margin: 0.20,
+
+transition: 'convex',
+transitionSpeed: 'default',
+
+// Plugins with reveal.js 4.x
+plugins: [ RevealNotes, RevealSearch, RevealZoom ],
+
+// Optional libraries used to extend reveal.js
+dependencies: [
+]
+
+});
+</script>
+</body>
+</html>
